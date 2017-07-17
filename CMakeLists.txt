@@ -9,8 +9,10 @@ file(GLOB my_source_files "*.h" "*.cpp")
 
 add_executable(teste_http_server ${my_source_files})
 include_directories(${BOOST_INCLUDE_DIR})
-#target_link_libraries(teste_http_server ${boost_glob})
 
+target_link_libraries(teste_http_server "C:/boost_1_64_0/stage/lib/libboost_system-vc120-mt-gd-1_64.lib")
+target_link_libraries(teste_http_server "C:/boost_1_64_0/stage/lib/libboost_date_time-vc120-mt-gd-1_64.lib")
+target_link_libraries(teste_http_server "C:/boost_1_64_0/stage/lib/libboost_regex-vc120-mt-gd-1_64.lib")
 #add_library (vr ${my_source_files} ) 
 # Expose B's public includes (including Boost transitively) to other
 # subprojects through cache variable.
