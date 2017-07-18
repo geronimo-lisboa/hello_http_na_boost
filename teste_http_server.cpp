@@ -87,10 +87,21 @@ using boost::asio::ip::tcp;
 //	}
 //};
 
+class session
+{
+	boost::asio::streambuf buff;	
+public:
+	boost::asio::ip::tcp::socket socket;
+	session(boost::asio::io_service& io_service) :socket(io_service)
+	{
+
+	}
+};
+
 void acceptConnections(boost::asio::ip::tcp::acceptor& acceptor, boost::asio::io_service& io_service)
 {
-	boost::asio::ip::tcp::socket socket(io_service);
-	acceptor.async_accept(socket, [&socket, &acceptor, &io_service](const boost::system::error_code& accept_error)
+	std::shared_ptr<session> my_session = make_shared<session>(io_service);
+	acceptor.async_accept(my_session->socket, [my_session, &acceptor, &io_service](const boost::system::error_code& accept_error)
 	{
 		acceptConnections(acceptor, io_service);
 		if (!accept_error)
