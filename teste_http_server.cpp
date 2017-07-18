@@ -2,49 +2,118 @@
 #include <sstream>
 #include <boost\asio.hpp>
 #include <ctime>
+#include <map>
+#include <string>
 using namespace std;
 using boost::asio::ip::tcp;
 
+//class http_headers
+//{
+//	std::string method, url, version;
+//	std::map<std::string, std::string> headers;
+//public:
+//	std::string get_response()
+//	{
+//		std::stringstream ssOut;
+//		if (url == "/hello")
+//		{
+//			std::string sHTML = "<html><body><h1>Hello World</h1><p>This is a test web server in c++</p></body></html>";
+//			ssOut << "HTTP/1.1 200 OK" << std::endl;
+//			ssOut << "content-type: text/html" << std::endl;
+//			ssOut << "content-length: " << sHTML.length() << std::endl;
+//			ssOut << std::endl;
+//			ssOut << sHTML;
+//		}
+//		else
+//		{
+//			std::string sHTML = "<html><body><h1>404 Not Found</h1><p>There's nothing here.</p></body></html>";
+//			ssOut << "HTTP/1.1 404 Not Found" << std::endl;
+//			ssOut << "content-type: text/html" << std::endl;
+//			ssOut << "content-length: " << sHTML.length() << std::endl;
+//			ssOut << std::endl;
+//			ssOut << sHTML;
+//		}
+//		return ssOut.str();
+//	}
+//	int content_length()
+//	{
+//		auto request = headers.find("content-length");
+//		if (request != headers.end())
+//		{
+//			std::stringstream ssLength(request->second);
+//			int content_length;
+//			ssLength >> content_length;
+//			return content_length;
+//		}
+//		return 0;
+//	}
+//	void on_read_header(std::string line)
+//	{
+//		std::stringstream ssHeader(line);
+//		std::string headerName;
+//		std::getline(ssHeader, headerName, ':');
+//		std::string value;
+//		std::getline(ssHeader, value);
+//		headers[headerName] = value;
+//	}
+//	void on_read_request_line(std::string line)
+//	{
+//		std::stringstream ssRequestLine(line);
+//		ssRequestLine >> method;
+//		ssRequestLine >> url;
+//		ssRequestLine >> version;
+//		std::cout << "request for resource: " << url << std::endl;
+//	}
+//};
+//
+//class session
+//{
+//public:
+//	boost::asio::ip::tcp::socket socket;
+//	boost::asio::streambuf buff;
+//	http_headers headers;
+//	void read_body()
+//	{
+//		int nBuffer = 1000;
+//		std::shared_ptr<std::vector<char>> bufptr = std::make_shared<std::vector<char>>(nBuffer);
+//		boost::asio::read(socket, boost::asio::buffer(*bufptr, nBuffer), [](const error_code& e, std::size_t s)
+//		{
+//		});
+//	}
+//	void read_next_line()
+//	{
+//		boost::asio::read_until(socket, buff, '\r');
+//
+//	}
+//};
 
+void acceptConnections(boost::asio::ip::tcp::acceptor& acceptor, boost::asio::io_service& io_service)
+{
+	boost::asio::ip::tcp::socket socket(io_service);
+	acceptor.async_accept(socket, [&socket, &acceptor, &io_service](const boost::system::error_code& accept_error)
+	{
+		acceptConnections(acceptor, io_service);
+		if (!accept_error)
+		{
+			std::cout << "aceitou conexão" << endl;
+		}
+		else
+		{
+			std::cout << "erro " << accept_error.value() << " " << accept_error.message() << std::endl;
+		}
+	});
+
+}
 
 int main(int argc, char** argv)
 {
 	try
 	{
 		boost::asio::io_service io_service;
-
 		tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 40001));
-		while (true)
-		{
-			tcp::socket socket(io_service);
-			acceptor.accept(socket);
-/////////////-------------THIS SOLVED THE PROBLEM----------------------
-			boost::asio::streambuf s_buf;
-			boost::asio::async_read_until(socket, s_buf, "\r\n\r\n",
-				std::bind([](const boost::system::error_code& ec){
-				if (ec != 0)
-					std::cout << "deu merda " << ec.value() << ", " << ec.message();
-				}, 
-				std::placeholders::_1));
-			std::string message;
-			std::istream input_stream(&s_buf);
-			std::getline(input_stream, message);
-			std::cout << message << std::endl;
-///////////////------------------------------------------------------
-			time_t now = time(0);
-			stringstream ssHtml;
-			ssHtml << "HELLO WORLD ";
-			stringstream ssHttp;
-			ssHttp << "HTTP/1.1 200 OK\r\n";
-			ssHttp << "Connection: close\r\n";
-			ssHttp << "Content-Type: text/html\r\n";
-			ssHttp << "Content-Length: " << ssHtml.str().size();// << "\r\n";
-			ssHttp << "\r\n\r\n";
-			ssHttp << ssHtml.str();			
-			boost::system::error_code ignored_error;
-			cout << ssHttp.str();
-			boost::asio::write(socket, boost::asio::buffer(ssHttp.str()), ignored_error);
-		}
+		acceptor.listen();
+		acceptConnections(acceptor, io_service);
+		io_service.run();
 	}
 	catch (std::exception &ex)
 	{
