@@ -97,11 +97,22 @@ public:
 
 	}
 	static void interact(std::shared_ptr<session> pThis);
+	static void readFirstLine(std::shared_ptr<session> pThis);
 };
-
+void session::readFirstLine(std::shared_ptr<session> pThis)
+{
+	boost::asio::async_read_until(pThis->socket, pThis->buff, '\r', [pThis](const boost::system::error_code& e, std::size_t s){
+		std::string line, ignore;
+		std::istream stream{ &pThis->buff };
+		std::getline(stream, line, '\r');
+		std::getline(stream, ignore, '\n');
+		cout << line << endl;
+		cout << ignore << endl;
+	});
+}
 void session::interact(std::shared_ptr<session> pThis)
 {
-
+	readFirstLine(pThis);
 }
 
 void acceptConnections(boost::asio::ip::tcp::acceptor& acceptor, boost::asio::io_service& io_service)
