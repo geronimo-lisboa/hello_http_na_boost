@@ -3,68 +3,69 @@
 #include <boost\asio.hpp>
 #include <ctime>
 #include <map>
+#include <sstream>
 #include <string>
 using namespace std;
 using boost::asio::ip::tcp;
 
-//class http_headers
-//{
-//	std::string method, url, version;
-//	std::map<std::string, std::string> headers;
-//public:
-//	std::string get_response()
-//	{
-//		std::stringstream ssOut;
-//		if (url == "/hello")
-//		{
-//			std::string sHTML = "<html><body><h1>Hello World</h1><p>This is a test web server in c++</p></body></html>";
-//			ssOut << "HTTP/1.1 200 OK" << std::endl;
-//			ssOut << "content-type: text/html" << std::endl;
-//			ssOut << "content-length: " << sHTML.length() << std::endl;
-//			ssOut << std::endl;
-//			ssOut << sHTML;
-//		}
-//		else
-//		{
-//			std::string sHTML = "<html><body><h1>404 Not Found</h1><p>There's nothing here.</p></body></html>";
-//			ssOut << "HTTP/1.1 404 Not Found" << std::endl;
-//			ssOut << "content-type: text/html" << std::endl;
-//			ssOut << "content-length: " << sHTML.length() << std::endl;
-//			ssOut << std::endl;
-//			ssOut << sHTML;
-//		}
-//		return ssOut.str();
-//	}
-//	int content_length()
-//	{
-//		auto request = headers.find("content-length");
-//		if (request != headers.end())
-//		{
-//			std::stringstream ssLength(request->second);
-//			int content_length;
-//			ssLength >> content_length;
-//			return content_length;
-//		}
-//		return 0;
-//	}
-//	void on_read_header(std::string line)
-//	{
-//		std::stringstream ssHeader(line);
-//		std::string headerName;
-//		std::getline(ssHeader, headerName, ':');
-//		std::string value;
-//		std::getline(ssHeader, value);
-//		headers[headerName] = value;
-//	}
-//	void on_read_request_line(std::string line)
-//	{
-//		std::stringstream ssRequestLine(line);
-//		ssRequestLine >> method;
-//		ssRequestLine >> url;
-//		ssRequestLine >> version;
-//		std::cout << "request for resource: " << url << std::endl;
-//	}
-//};
+class http_headers
+{
+	std::string method, url, version;
+	std::map<std::string, std::string> headers;
+public:
+	std::string get_response()
+	{
+		std::stringstream ssOut;
+		if (url == "/hello")
+		{
+			std::string sHTML = "<html><body><h1>Hello World</h1><p>This is a test web server in c++</p></body></html>";
+			ssOut << "HTTP/1.1 200 OK" << std::endl;
+			ssOut << "content-type: text/html" << std::endl;
+			ssOut << "content-length: " << sHTML.length() << std::endl;
+			ssOut << std::endl;
+			ssOut << sHTML;
+		}
+		else
+		{
+			std::string sHTML = "<html><body><h1>404 Not Found</h1><p>There's nothing here.</p></body></html>";
+			ssOut << "HTTP/1.1 404 Not Found" << std::endl;
+			ssOut << "content-type: text/html" << std::endl;
+			ssOut << "content-length: " << sHTML.length() << std::endl;
+			ssOut << std::endl;
+			ssOut << sHTML;
+		}
+		return ssOut.str();
+	}
+	int content_length()
+	{
+		auto request = headers.find("content-length");
+		if (request != headers.end())
+		{
+			std::stringstream ssLength(request->second);
+			int content_length;
+			ssLength >> content_length;
+			return content_length;
+		}
+		return 0;
+	}
+	void on_read_header(std::string line)
+	{
+		std::stringstream ssHeader(line);
+		std::string headerName;
+		std::getline(ssHeader, headerName, ':');
+		std::string value;
+		std::getline(ssHeader, value);
+		headers[headerName] = value;
+	}
+	void on_read_request_line(std::string line)
+	{
+		std::stringstream ssRequestLine(line);
+		ssRequestLine >> method;
+		ssRequestLine >> url;
+		ssRequestLine >> version;
+		std::cout << "request for resource: " << url << std::endl;
+	}
+};
 //
 //class session
 //{
@@ -88,8 +89,9 @@ using boost::asio::ip::tcp;
 //};
 class session
 {
-	boost::asio::streambuf buff;	
+	http_headers headers;
 public:
+	boost::asio::streambuf buff;
 	boost::asio::ip::tcp::socket socket;
 
 	session(boost::asio::io_service& io_service) :socket(io_service)
@@ -98,7 +100,38 @@ public:
 	}
 	static void interact(std::shared_ptr<session> pThis);
 	static void readFirstLine(std::shared_ptr<session> pThis);
+	static void read_next_line(std::shared_ptr<session> pThis);
 };
+void session::read_next_line(std::shared_ptr<session> pThis)
+{
+	boost::asio::async_read_until(pThis->socket, pThis->buff, '\r', [pThis](const boost::system::error_code& e, std::size_t s){
+		std::string line, ignore;
+		std::istream stream{ &pThis->buff };
+		std::getline(stream, line, '\r');
+		std::getline(stream, ignore, '\n');
+
+		cout << line << endl;
+		cout << ignore << endl;
+
+		pThis->headers.on_read_header(line);
+		if (line.length() == 0)
+		{
+			if (pThis->headers.content_length() == 0)
+			{
+				std::shared_ptr<std::string> str = std::make_shared<std::string>(pThis->headers.get_response());
+				boost::asio::async_write(pThis->socket, boost::asio::buffer(str->c_str(), str->length()), [pThis, str](const boost::system::error_code& e, std::size_t s)
+				{
+					std::cout << "done" << std::endl;
+					
+				});
+			}
+		}
+		else
+		{
+			pThis->read_next_line(pThis);
+		}
+	});
+}
 void session::readFirstLine(std::shared_ptr<session> pThis)
 {
 	boost::asio::async_read_until(pThis->socket, pThis->buff, '\r', [pThis](const boost::system::error_code& e, std::size_t s){
@@ -106,8 +139,12 @@ void session::readFirstLine(std::shared_ptr<session> pThis)
 		std::istream stream{ &pThis->buff };
 		std::getline(stream, line, '\r');
 		std::getline(stream, ignore, '\n');
+		
 		cout << line << endl;
 		cout << ignore << endl;
+
+		pThis->headers.on_read_request_line(line);
+		pThis->read_next_line(pThis);
 	});
 }
 void session::interact(std::shared_ptr<session> pThis)
